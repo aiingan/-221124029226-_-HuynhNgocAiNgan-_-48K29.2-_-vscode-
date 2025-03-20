@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Xác suất bán hàng theo Nhóm hàng</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        h1 {
+            text-align: center;
+            color: black;
+        }
+        #chart {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+        }
+    </style>
+</head>
+<body>
+    <h1>Xác suất bán hàng của Nhóm hàng theo Tháng</h1>
+    <div id="chart"></div>
+
+    <script>
+        const width = 1500;
+        const height = 700;
+        const margin = { top: 50, right: 30, bottom: 50, left: 100 };
+
+        const svg = d3.select("#chart")
+            .append("svg")
+            .attr("width", width)
+            .attr("height", height)
+            .append("g")
+            .attr("transform", `translate(${margin.left},${margin.top})`);
+
+        d3.csv("data_ggsheet.csv").then(data => {
+            // Chuyển đổi dữ liệu
+            const months = [
+                "Tháng 01", "Tháng 02", "Tháng 03", "Tháng 04", "Tháng 05", "Tháng 06",
+                "Tháng 07", "Tháng 08", "Tháng 09", "Tháng 10", "Tháng 11", "Tháng 12"
+            ];
+
+            const groupedData = d3.group(data, d => d.Tháng, d => d["Mã nhóm hàng"]);
+            const totalOrdersPerMonth = d3.rollup(data, v => new Set(v.map(d => d["Mã đơn hàng"])).size, d => d.Tháng);
+            
+            let processedData = [];
+            groupedData.forEach((categories, month) => {
+                categories.forEach((orders, category) => {
+                    const uniqueOrders = new Set(orders.map(d => d["Mã đơn hàng"])).size;
+                    const probability = uniqueOrders / totalOrdersPerMonth.get(month);
+                    processedData.push({ month, category, probability });
+                });
+            });
+
+            // Scale cho trục X và Y
+            const x = d3.scalePoint()
+                .domain(months)
+                .range([0, width - margin.left - margin.right])
+                .padding(0.5);
+
+            const y = d3.scaleLinear()
+                .domain([0, d3.max(processedData, d => d.probability) * 1.1])
+                .range([height - margin.top - margin.bottom, 0]);
+
+            const color = d3.scaleOrdinal(d3.schemeCategory10);
+
+            // Vẽ trục
+            svg.append("g")
+                .attr("transform", `translate(0,${height - margin.top - margin.bottom})`)
+                .call(d3.axisBottom(x))
+                .selectAll("text")
+                .attr("transform", "rotate(-30)")
+                .style("text-anchor", "end");
+
+            svg.append("g")
+                .call(d3.axisLeft(y).tickFormat(d => d3.format(".1%")(d)));
+
+            // Nhóm dữ liệu theo category
+            const categoryData = d3.group(processedData, d => d.category);
+
+            // Vẽ line chart
+            categoryData.forEach((values, category) => {
+                const line = d3.line()
+                    .x(d => x("Tháng " + d.month.padStart(2, "0")))
+                    .y(d => y(d.probability));
+
+                svg.append("path")
+                    .datum(values)
+                    .attr("fill", "none")
+                    .attr("stroke", color(category))
+                    .attr("stroke-width", 2)
+                    .attr("d", line);
+
+                // Vẽ điểm tròn tại từng điểm dữ liệu
+                svg.selectAll(".dot-" + category)
+                    .data(values)
+                    .enter()
+                    .append("circle")
+                    .attr("cx", d => x("Tháng " + d.month.padStart(2, "0")))
+                    .attr("cy", d => y(d.probability))
+                    .attr("r", 4)
+                    .attr("fill", color(category));
+            });
+
+            // Thêm chú thích
+            const legend = svg.append("g")
+                .attr("transform", `translate(${width - margin.right - 150}, ${margin.top})`);
+
+            let i = 0;
+            categoryData.forEach((_, category) => {
+                legend.append("circle")
+                    .attr("cx", 0)
+                    .attr("cy", i * 20)
+                    .attr("r", 5)
+                    .attr("fill", color(category));
+
+                legend.append("text")
+                    .attr("x", 10)
+                    .attr("y", i * 20 + 5)
+                    .text(category)
+                    .attr("font-size", "12px")
+                    .attr("alignment-baseline", "middle");
+
+                i++;
+            });
+        }).catch(error => {
+            console.error("Lỗi khi đọc CSV:", error);
+        });
+    </script>
+</body>
+</html>

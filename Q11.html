@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phân phối Lượt mua hàng</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        h1 {
+            text-align: center;
+            color: black;
+        }
+        #chart {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+        }
+    </style>
+</head>
+<body>
+    <h1>Phân phối Lượt mua hàng</h1>
+    <div id="chart"></div>
+
+    <script>
+        const width = 1500;
+        const height = 700;
+        const margin = { top: 50, right: 30, bottom: 50, left: 100 };
+
+        const svg = d3.select("#chart")
+            .append("svg")
+            .attr("width", width)
+            .attr("height", height)
+            .append("g")
+            .attr("transform", `translate(${margin.left},${margin.top})`);
+
+        d3.csv("data_ggsheet.csv").then(data => {
+            // Nhóm dữ liệu theo khách hàng và đếm số lượt mua hàng (số đơn hàng duy nhất)
+            const customerPurchases = d3.rollup(
+                data, 
+                v => new Set(v.map(d => d["Mã đơn hàng"])).size, 
+                d => d["Mã khách hàng"]
+            );
+
+            // Nhóm số lượng khách hàng theo số lần mua hàng
+            const purchaseCounts = new Map();
+            customerPurchases.forEach((count, customer) => {
+                purchaseCounts.set(count, (purchaseCounts.get(count) || 0) + 1);
+            });
+
+            // Chuyển dữ liệu thành mảng { purchases, customers }
+            let processedData = Array.from(purchaseCounts, ([purchases, customers]) => ({ purchases, customers }))
+                                    .sort((a, b) => a.purchases - b.purchases);
+
+            // Scale cho trục X và Y
+            const x = d3.scaleBand()
+                .domain(processedData.map(d => d.purchases))
+                .range([0, width - margin.left - margin.right])
+                .padding(0.2);
+
+            const y = d3.scaleLinear()
+                .domain([0, d3.max(processedData, d => d.customers)])
+                .range([height - margin.top - margin.bottom, 0]);
+
+            // Vẽ trục
+            svg.append("g")
+                .attr("transform", `translate(0,${height - margin.top - margin.bottom})`)
+                .call(d3.axisBottom(x).tickFormat(d3.format("d")));
+
+            svg.append("g")
+                .call(d3.axisLeft(y));
+
+            // Vẽ cột
+            svg.selectAll(".bar")
+                .data(processedData)
+                .enter()
+                .append("rect")
+                .attr("class", "bar")
+                .attr("x", d => x(d.purchases))
+                .attr("y", d => y(d.customers))
+                .attr("width", x.bandwidth())
+                .attr("height", d => height - margin.top - margin.bottom - y(d.customers))
+                .attr("fill", "steelblue");
+        });
+    </script>
+</body>
+</html>

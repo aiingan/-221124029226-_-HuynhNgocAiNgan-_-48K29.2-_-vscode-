@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Doanh số bán hàng theo Nhóm hàng</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        h1 { text-align: center; }
+        .chart-container { display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; }
+        .chart { width: 400px; height: 300px; padding: 10px; background: #f8f8f8; border-radius: 10px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); }
+        .bar { fill: steelblue; }
+        .axis-label { font-size: 12px; font-weight: bold; }
+        .chart-title { text-align: center; font-weight: bold; font-size: 16px; margin-bottom: 10px; color: #333; }
+    </style>
+</head>
+<body>
+
+    <h1>Doanh số bán hàng theo Nhóm hàng</h1>
+    <div class="chart-container" id="charts"></div>
+
+    <script>
+        // Kích thước mỗi chart
+        const width = 400, height = 300, margin = { top: 20, right: 20, bottom: 40, left: 150 };
+
+        // Load dữ liệu từ CSV
+        d3.csv("data_ggsheet.csv").then(data => {
+            // Chuyển đổi dữ liệu
+            data.forEach(d => {
+                d["Mã mặt hàng"] = d["Mã mặt hàng"];
+                d["Tên mặt hàng"] = d["Tên mặt hàng"];
+                d["Thành tiền"] = +d["Thành tiền"]; // Chuyển thành số
+                d["Mã nhóm hàng"] = d["Mã nhóm hàng"];
+            });
+
+            // Lấy danh sách nhóm hàng (top 5 nhóm hàng phổ biến)
+            const topGroups = Array.from(new Set(data.map(d => d["Mã nhóm hàng"]))).slice(0, 5);
+
+            // Nhóm dữ liệu theo Mã nhóm hàng
+            let processedData = {};
+            topGroups.forEach(group => {
+                let grouped = d3.rollup(
+                    data.filter(d => d["Mã nhóm hàng"] === group),
+                    v => d3.sum(v, d => d["Thành tiền"]),
+                    d => `[${d["Mã mặt hàng"]}] ${d["Tên mặt hàng"]}`
+                );
+
+                processedData[group] = Array.from(grouped, ([item, value]) => ({ item, value }))
+                    .sort((a, b) => b.value - a.value); // Sắp xếp theo doanh số giảm dần
+            });
+
+            // Tạo danh sách màu sắc riêng theo Mã mặt hàng
+            const uniqueItems = [...new Set(data.map(d => `[${d["Mã mặt hàng"]}] ${d["Tên mặt hàng"]}`))];
+            const colorScale = d3.scaleOrdinal(d3.schemeCategory10).domain(uniqueItems);
+
+            // Tính tổng để chuẩn hóa thành %
+            const totalSales = d3.sum(data, d => d["Thành tiền"]);
+
+            // Vẽ chart cho từng nhóm hàng
+            Object.keys(processedData).forEach(group => {
+                let chartData = processedData[group];
+
+                // Chuyển đổi giá trị thành phần trăm
+                chartData.forEach(d => d.value = (d.value / totalSales) * 100);
+
+                // Tạo div chứa chart
+                let chartDiv = d3.select("#charts")
+                    .append("div")
+                    .attr("class", "chart");
+
+                // Tiêu đề chart
+                chartDiv.append("div")
+                    .attr("class", "chart-title")
+                    .text(`[${group}] ${data.find(d => d["Mã nhóm hàng"] === group)["Tên nhóm hàng"]}`);
+
+                // Tạo SVG
+                let svg = chartDiv.append("svg")
+                    .attr("width", width)
+                    .attr("height", height)
+                    .append("g")
+                    .attr("transform", `translate(${margin.left},${margin.top})`);
+
+                // Thang đo
+                const xScale = d3.scaleLinear()
+                    .domain([0, d3.max(chartData, d => d.value)])
+                    .range([0, width - margin.left - margin.right]);
+
+                const yScale = d3.scaleBand()
+                    .domain(chartData.map(d => d.item))
+                    .range([0, height - margin.top - margin.bottom])
+                    .padding(0.2);
+
+                // Vẽ cột
+                svg.selectAll(".bar")
+                    .data(chartData)
+                    .enter()
+                    .append("rect")
+                    .attr("class", "bar")
+                    .attr("y", d => yScale(d.item))
+                    .attr("width", d => xScale(d.value))
+                    .attr("height", yScale.bandwidth())
+                    .attr("fill", d => colorScale(d.item));
+
+                // Trục X hiển thị đơn vị %
+                svg.append("g")
+                    .attr("transform", `translate(0,${height - margin.top - margin.bottom})`)
+                    .call(d3.axisBottom(xScale)
+                        .ticks(5)
+                        .tickFormat(d => `${Math.round(d)}%`) // Làm tròn số và hiển thị %
+                    );
+
+                // Trục Y
+                svg.append("g")
+                    .call(d3.axisLeft(yScale));
+            });
+        });
+    </script>
+
+</body>
+</html>

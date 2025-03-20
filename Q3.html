@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Doanh số bán hàng theo Tháng</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #fcfcfc;
+        }
+
+        h1 {
+            text-align: center;
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        #chart {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+        }
+
+        .bar-label {
+            font-size: 12px;
+            font-weight: bold;
+            fill: #0d2541;
+        }
+    </style>
+</head>
+<body>
+    <h1>Doanh số bán hàng theo Tháng</h1>
+    <div id="chart"></div>
+
+    <script>
+        const width = 1500;
+        const height = 700;
+        const margin = { top: 40, right: 40, bottom: 50, left: 60 };
+
+        const data = [
+            { month: "Tháng 01", total: 286 },
+            { month: "Tháng 02", total: 295 },
+            { month: "Tháng 03", total: 258 },
+            { month: "Tháng 04", total: 196 },
+            { month: "Tháng 05", total: 215 },
+            { month: "Tháng 06", total: 263 },
+            { month: "Tháng 07", total: 272 },
+            { month: "Tháng 08", total: 520 },
+            { month: "Tháng 09", total: 528 },
+            { month: "Tháng 10", total: 568 },
+            { month: "Tháng 11", total: 629 },
+            { month: "Tháng 12", total: 750 }
+        ];
+
+        const colors = ["#2C5F8D", "#9AC7E2", "#E98E2C", "#FBC785", "#4E9F50", "#85D199", "#B49228", "#F3CF4A", "#3A908C", "#88C5BE", "#DA4A50", "#FFA6A6"];
+
+        const svg = d3.select("#chart")
+            .append("svg")
+            .attr("width", width)
+            .attr("height", height);
+
+        const x = d3.scaleBand()
+            .domain(data.map(d => d.month))
+            .range([0, width - margin.left - margin.right])
+            .padding(0.2);
+
+        const y = d3.scaleLinear()
+            .domain([0, d3.max(data, d => d.total)])
+            .nice()
+            .range([height - margin.top - margin.bottom, 0]);
+
+        const g = svg.append("g")
+            .attr("transform", `translate(${margin.left},${margin.top})`);
+
+        g.selectAll(".bar")
+            .data(data)
+            .enter()
+            .append("rect")
+            .attr("class", "bar")
+            .attr("x", d => x(d.month))
+            .attr("y", d => y(d.total))
+            .attr("width", x.bandwidth())
+            .attr("height", d => height - margin.top - margin.bottom - y(d.total))
+            .attr("fill", (d, i) => colors[i]);
+
+        g.selectAll(".bar-label")
+            .data(data)
+            .enter()
+            .append("text")
+            .attr("class", "bar-label")
+            .attr("x", d => x(d.month) + x.bandwidth() / 2)
+            .attr("y", d => y(d.total) - 5)
+            .attr("text-anchor", "middle")
+            .text(d => `${d.total} triệu VND`);
+
+        g.append("g")
+            .attr("class", "x-axis")
+            .attr("transform", `translate(0,${height - margin.top - margin.bottom})`)
+            .call(d3.axisBottom(x));
+
+        g.append("g")
+            .attr("class", "y-axis")
+            .call(d3.axisLeft(y).tickFormat(d => `${d}M`));
+    </script>
+</body>
+</html>

@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Doanh số trung bình theo ngày trong tuần</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            text-align: center;
+        }
+        svg {
+            width: 1500px;
+            height: 700px;
+            display: block;
+            margin: auto;
+        }
+        .axis-label {
+            font-size: 14px;
+            font-weight: bold;
+        }
+        .label {
+            font-size: 10px;
+            fill: black;
+            text-anchor: middle;
+        }
+    </style>
+</head>
+<body>
+    <h1>Doanh số trung bình theo Ngày trong tuần</h1>
+    <svg id="chart"></svg>
+    <script>
+        d3.csv("data_ggsheet.csv").then(function(data) {
+            const daysOrder = ["Thứ Hai", "Thứ Ba", "Thứ Tư", "Thứ Năm", "Thứ Sáu", "Thứ Bảy", "Chủ Nhật"];
+            const daysMapping = {
+                1: "Thứ Hai", 2: "Thứ Ba", 3: "Thứ Tư", 4: "Thứ Năm",
+                5: "Thứ Sáu", 6: "Thứ Bảy", 0: "Chủ Nhật"
+            };
+
+            const colorMapping = {
+                "Thứ Hai": "#1f77b4",
+                "Thứ Ba": "#ff7f0e",
+                "Thứ Tư": "#2ca02c",
+                "Thứ Năm": "#d62728",
+                "Thứ Sáu": "#9467bd",
+                "Thứ Bảy": "#8c564b",
+                "Chủ Nhật": "#e377c2"
+            };
+
+            data.forEach(d => {
+                d["Thời gian tạo đơn"] = new Date(d["Thời gian tạo đơn"]);
+                d["Thứ trong tuần"] = d["Thời gian tạo đơn"].getDay();
+                d["Thành tiền"] = +d["Thành tiền"];
+            });
+
+            let groupedData = d3.group(data, d => d["Thứ trong tuần"]);
+            let avgSales = Array.from(groupedData, ([day, values]) => {
+                let totalSales = d3.sum(values, d => d["Thành tiền"]);
+                let uniqueDays = new Set(values.map(d => d["Thời gian tạo đơn"].toDateString())).size;
+                return { day: daysMapping[day], value: uniqueDays ? Math.round(totalSales / uniqueDays) : 0 };
+            });
+            avgSales.sort((a, b) => daysOrder.indexOf(a.day) - daysOrder.indexOf(b.day));
+
+            const width = 800, height = 500, margin = { top: 30, right: 30, bottom: 50, left: 100 };
+            const svg = d3.select("#chart").attr("width", width).attr("height", height);
+
+            const x = d3.scaleBand()
+                .domain(daysOrder)
+                .range([margin.left, width - margin.right])
+                .padding(0.1);
+
+            const y = d3.scaleLinear()
+                .domain([0, d3.max(avgSales, d => d.value) / 1e6])
+                .nice()
+                .range([height - margin.bottom, margin.top]);
+
+            svg.append("g")
+                .attr("transform", `translate(0,${height - margin.bottom})`)
+                .call(d3.axisBottom(x))
+                .selectAll("text").style("text-anchor", "middle");
+
+            svg.append("g")
+                .attr("transform", `translate(${margin.left},0)`)
+                .call(d3.axisLeft(y).tickFormat(d => d.toLocaleString() + " M"));
+
+            svg.selectAll(".bar")
+                .data(avgSales)
+                .enter()
+                .append("rect")
+                .attr("class", "bar")
+                .attr("x", d => x(d.day))
+                .attr("y", d => y(d.value / 1e6))
+                .attr("height", d => y(0) - y(d.value / 1e6))
+                .attr("width", x.bandwidth())
+                .attr("fill", d => colorMapping[d.day]);
+
+            svg.selectAll(".label")
+                .data(avgSales)
+                .enter()
+                .append("text")
+                .attr("class", "label")
+                .attr("x", d => x(d.day) + x.bandwidth() / 2)
+                .attr("y", d => y(d.value / 1e6) - 5)
+                .text(d => d.value.toLocaleString() + " VND");
+        });
+    </script>
+</body>
+</html>

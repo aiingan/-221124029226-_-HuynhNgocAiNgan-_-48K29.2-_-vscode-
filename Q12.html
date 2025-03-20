@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phân phối Mức chi trả của Khách hàng</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            text-align: center;
+        }
+        #chart {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+        }
+        svg {
+            font-size: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Phân phối Mức chi trả của Khách hàng</h1>
+    <div id="chart"></div>
+    <script>
+        d3.csv("data_ggsheet.csv").then(function(data) {
+            let spendingMap = new Map();
+            
+            data.forEach(d => {
+                let customerID = d["Mã khách hàng"];
+                let amount = parseFloat(d["Thành tiền"]);
+                if (!isNaN(amount)) {
+                    spendingMap.set(customerID, (spendingMap.get(customerID) || 0) + amount);
+                }
+            });
+            
+            let bins = d3.bin()
+                .thresholds(d3.range(0, d3.max(spendingMap.values()) + 50000, 50000))
+                (Array.from(spendingMap.values()));
+
+            let binData = bins.map(bin => ({ bin: bin.x0, count: bin.length }));
+
+            const width = 1500, height = 700;
+            const margin = { top: 20, right: 30, bottom: 80, left: 50 };
+
+            const svg = d3.select("#chart")
+                .append("svg")
+                .attr("width", width)
+                .attr("height", height);
+
+            const x = d3.scaleBand()
+                .domain(binData.map(d => d.bin))
+                .range([margin.left, width - margin.right])
+                .padding(0.1);
+
+            const y = d3.scaleLinear()
+                .domain([0, Math.min(1600, d3.max(binData, d => d.count))])
+                .nice()
+                .range([height - margin.bottom, margin.top]);
+
+            const g = svg.append("g");
+
+            g.selectAll("rect")
+                .data(binData)
+                .enter()
+                .append("rect")
+                .attr("x", d => x(d.bin))
+                .attr("y", d => y(d.count))
+                .attr("width", x.bandwidth())
+                .attr("height", d => height - margin.bottom - y(d.count))
+                .attr("fill", "steelblue");
+
+            g.append("g")
+                .attr("transform", `translate(0,${height - margin.bottom})`)
+                .call(d3.axisBottom(x).tickFormat(d => d/1000 + "K"))
+                .selectAll("text")
+                .attr("transform", "rotate(-90)")
+                .style("text-anchor", "end");
+
+            g.append("g")
+                .attr("transform", `translate(${margin.left},0)`)
+                .call(d3.axisLeft(y));
+        });
+    </script>
+</body>
+</html>

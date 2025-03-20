@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Xác suất bán hàng theo Nhóm hàng và Mặt hàng</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        h1 {
+            text-align: center;
+        }
+        .chart-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            justify-content: center;
+        }
+        .chart {
+            width: 400px;
+            height: 300px;
+            padding: 10px;
+            background: #f8f8f8;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .chart-title {
+            text-align: center;
+            font-weight: bold;
+            font-size: 14px;
+            margin-bottom: 10px;
+            color: #333;
+        }
+        .line {
+            fill: none;
+            stroke-width: 2;
+        }
+        .dot {
+            stroke: white;
+            stroke-width: 2;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Xác suất bán hàng theo Nhóm hàng và Mặt hàng</h1>
+    <div class="chart-container" id="charts"></div>
+
+    <script>
+        const width = 400, height = 250, margin = { top: 20, right: 20, bottom: 40, left: 50 };
+
+        d3.csv("data_ggsheet.csv").then(data => {
+            data.forEach(d => {
+                d.Tháng = d.Tháng; // Dạng "T01", "T02"
+                d["Mã nhóm hàng"] = d["Mã nhóm hàng"];
+                d["Mã mặt hàng"] = d["Mã mặt hàng"];
+                d["Mã đơn hàng"] = d["Mã đơn hàng"];
+            });
+
+            const groups = Array.from(new Set(data.map(d => d["Mã nhóm hàng"])));
+            const months = ["T01", "T02", "T03", "T04", "T05", "T06", "T07", "T08", "T09", "T10", "T11", "T12"];
+
+            groups.forEach(group => {
+                let items = Array.from(new Set(data.filter(d => d["Mã nhóm hàng"] === group).map(d => d["Mã mặt hàng"])));
+
+                let processedData = {};
+                items.forEach(item => {
+                    let grouped = d3.rollup(
+                        data.filter(d => d["Mã nhóm hàng"] === group && d["Mã mặt hàng"] === item),
+                        v => new Set(v.map(d => d["Mã đơn hàng"])).size / data.length,
+                        d => d.Tháng
+                    );
+
+                    processedData[item] = months.map(month => ({
+                        month,
+                        value: grouped.get(month) || 0
+                    }));
+                });
+
+                let chartDiv = d3.select("#charts")
+                    .append("div")
+                    .attr("class", "chart");
+
+                chartDiv.append("div")
+                    .attr("class", "chart-title")
+                    .text(`[${group}] ${data.find(d => d["Mã nhóm hàng"] === group)["Tên nhóm hàng"]}`);
+
+                let svg = chartDiv.append("svg")
+                    .attr("width", width)
+                    .attr("height", height)
+                    .append("g")
+                    .attr("transform", `translate(${margin.left},${margin.top})`);
+
+                const xScale = d3.scalePoint()
+                    .domain(months)
+                    .range([0, width - margin.left - margin.right]);
+
+                const yScale = d3.scaleLinear()
+                    .domain([0, d3.max(Object.values(processedData).flat(), d => d.value) * 1.2])
+                    .range([height - margin.top - margin.bottom, 0]);
+
+                svg.append("g")
+                    .attr("transform", `translate(0,${height - margin.top - margin.bottom})`)
+                    .call(d3.axisBottom(xScale));
+
+                svg.append("g")
+                    .call(d3.axisLeft(yScale).tickFormat(d => d3.format(".0%")(d)));
+
+                let colorScale = d3.scaleOrdinal(d3.schemeCategory10).domain(items);
+
+                Object.keys(processedData).forEach(item => {
+                    let line = d3.line()
+                        .x(d => xScale(d.month))
+                        .y(d => yScale(d.value))
+                        .curve(d3.curveMonotoneX);
+
+                    svg.append("path")
+                        .datum(processedData[item])
+                        .attr("class", "line")
+                        .attr("d", line)
+                        .attr("stroke", colorScale(item))
+                        .attr("fill", "none")
+                        .attr("stroke-width", 2);
+
+                    svg.selectAll(".dot-" + item)
+                        .data(processedData[item])
+                        .enter()
+                        .append("circle")
+                        .attr("class", "dot")
+                        .attr("cx", d => xScale(d.month))
+                        .attr("cy", d => yScale(d.value))
+                        .attr("r", 4)
+                        .attr("fill", colorScale(item))
+                        .attr("stroke", "white")
+                        .attr("stroke-width", 2);
+                });
+            });
+        });
+    </script>
+
+</body>
+</html>

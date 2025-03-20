@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Doanh số bán hàng theo Nhóm hàng</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        h1 {
+            text-align: center;
+            font-size: 24px;
+            font-weight: bold;
+        }
+        #chart {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+        }
+        .legend {
+            font-size: 12px;
+            font-weight: normal;
+        }
+    </style>
+</head>
+<body>
+    <h1>Doanh số bán hàng theo Nhóm hàng</h1>
+    <div id="chart"></div>
+
+    <script>
+        const width = 1500;
+        const height = 700;
+        const margin = { top: 20, right: 180, bottom: 50, left: 250 };
+
+        const svg = d3.select("#chart")
+            .append("svg")
+            .attr("width", width)
+            .attr("height", height);
+
+        d3.csv("data_ggsheet.csv").then(data => {
+            // Chuyển đổi đơn vị "Thành tiền" thành triệu đồng
+            data.forEach(d => d["Thành tiền"] = +d["Thành tiền"] / 1e6); 
+
+            // Nhóm dữ liệu theo "Mã nhóm hàng" và "Tên nhóm hàng", tính tổng "Thành tiền"
+            const groupedData = d3.rollup(
+                data,
+                v => d3.sum(v, d => d["Thành tiền"]),
+                d => `[${d["Mã nhóm hàng"]}] ${d["Tên nhóm hàng"]}`
+            );
+
+            // Chuyển đổi dữ liệu từ Map sang Array và sắp xếp theo doanh số giảm dần
+            const processedData = Array.from(groupedData, ([label, value]) => ({ label, value }))
+                .sort((a, b) => b.value - a.value);
+
+            // Tạo danh sách màu sắc ngẫu nhiên
+            const colorScale = d3.scaleOrdinal(d3.schemeCategory10)
+                .domain(processedData.map(d => d.label));
+
+            const x = d3.scaleLinear()
+                .domain([0, d3.max(processedData, d => d.value)])
+                .range([0, width - margin.left - margin.right]);
+
+            const y = d3.scaleBand()
+                .domain(processedData.map(d => d.label))
+                .range([0, height - margin.top - margin.bottom])
+                .padding(0.1);
+
+            const g = svg.append("g")
+                .attr("transform", `translate(${margin.left},${margin.top})`);
+
+            // Vẽ thanh cột
+            g.selectAll(".bar")
+                .data(processedData)
+                .enter()
+                .append("rect")
+                .attr("class", "bar")
+                .attr("y", d => y(d.label))
+                .attr("width", d => x(d.value))
+                .attr("height", y.bandwidth())
+                .attr("fill", d => colorScale(d.label));
+
+            // Hiển thị giá trị trên cột
+            g.selectAll(".bar-label")
+                .data(processedData)
+                .enter()
+                .append("text")
+                .attr("x", d => x(d.value) + 5)
+                .attr("y", d => y(d.label) + y.bandwidth() / 2)
+                .attr("dy", "0.35em")
+                .text(d => `${d.value.toFixed(0)} triệu VND`)
+                .style("font-size", "12px");
+
+            // Vẽ trục X (hiển thị đơn vị triệu đồng)
+            g.append("g")
+                .attr("class", "x-axis")
+                .attr("transform", `translate(0,${height - margin.top - margin.bottom})`)
+                .call(d3.axisBottom(x).ticks(5).tickFormat(d => `${d}M`));
+
+            // Vẽ trục Y
+            g.append("g")
+                .attr("class", "y-axis")
+                .call(d3.axisLeft(y));
+
+        }).catch(error => console.error("Lỗi khi đọc file CSV:", error));
+    </script>
+</body>
+</html>

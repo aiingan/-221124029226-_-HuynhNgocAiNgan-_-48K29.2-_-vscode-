@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Xác suất bán hàng theo Nhóm hàng</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            text-align: center;
+        }
+        svg {
+            width: 1500px;
+            height: 700px;
+            display: block;
+            margin: auto;
+        }
+        .label {
+            font-size: 12px;
+            fill: black;
+            text-anchor: start;
+        }
+    </style>
+</head>
+<body>
+    <h1>Xác suất bán hàng theo Nhóm hàng</h1>
+    <svg id="chart"></svg>
+    <script>
+        d3.csv("data_ggsheet.csv").then(function(data) {
+            // Nhóm dữ liệu theo Mã nhóm hàng, tính count distinct Mã đơn hàng
+            let groupOrders = d3.rollups(data, 
+                v => ({
+                    count: new Set(v.map(d => d["Mã đơn hàng"])).size, 
+                    category: v[0]["Tên nhóm hàng"] // Lấy nhóm hàng
+                }), 
+                d => `${d["Mã nhóm hàng"]} - ${d["Tên nhóm hàng"]}`
+            );
+
+            let totalOrders = new Set(data.map(d => d["Mã đơn hàng"])).size;
+
+            let probabilities = groupOrders.map(d => ({ 
+                name: d[0], 
+                value: +(d[1].count / totalOrders * 100).toFixed(1), // Làm tròn 1 chữ số thập phân
+                category: d[1].category
+            }));
+
+            probabilities.sort((a, b) => b.value - a.value);
+
+            // Tạo color scale theo nhóm hàng
+            const colorScale = d3.scaleOrdinal(d3.schemeCategory10)
+                .domain(probabilities.map(d => d.category));
+
+            const width = 900, height = 500, margin = { top: 30, right: 50, bottom: 50, left: 250 };
+            const svg = d3.select("#chart").attr("width", width).attr("height", height);
+
+            const x = d3.scaleLinear()
+                .domain([0, Math.max(60, d3.max(probabilities, d => d.value))]) // Đảm bảo có mốc 60%
+                .range([margin.left, width - margin.right]);
+
+            const y = d3.scaleBand()
+                .domain(probabilities.map(d => d.name))
+                .range([margin.top, height - margin.bottom])
+                .padding(0.1);
+
+            svg.append("g")
+                .attr("transform", `translate(0,${height - margin.bottom})`)
+                .call(d3.axisBottom(x).tickFormat(d => d + "%").ticks(6)); // Thêm mốc 60%
+
+            svg.append("g")
+                .attr("transform", `translate(${margin.left},0)`)
+                .call(d3.axisLeft(y));
+
+            svg.selectAll(".bar")
+                .data(probabilities)
+                .enter()
+                .append("rect")
+                .attr("class", "bar")
+                .attr("x", x(0))
+                .attr("y", d => y(d.name))
+                .attr("width", d => x(d.value) - x(0))
+                .attr("height", y.bandwidth())
+                .attr("fill", d => colorScale(d.category));
+
+            svg.selectAll(".label")
+                .data(probabilities)
+                .enter()
+                .append("text")
+                .attr("class", "label")
+                .attr("x", d => x(d.value) + 5)
+                .attr("y", d => y(d.name) + y.bandwidth() / 2)
+                .attr("dy", "0.35em")
+                .text(d => d.value + "%");
+        });
+    </script>
+</body>
+</html>

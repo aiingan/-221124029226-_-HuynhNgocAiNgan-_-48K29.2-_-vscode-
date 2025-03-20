@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Doanh số bán hàng</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        h1 {
+            text-align: center;
+        }
+        #chart {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+        }
+        .legend {
+            font-size: 14px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-top: 20px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-right: 15px;
+        }
+        .legend-color {
+            width: 15px;
+            height: 15px;
+            display: inline-block;
+            margin-right: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Doanh số bán hàng theo Mặt hàng</h1>
+    <div id="chart"></div>
+    <div id="legend" class="legend"></div>
+
+    <script>
+        const width = 1500;
+        const height = 700;
+        const margin = { top: 20, right: 20, bottom: 50, left: 300 };
+
+        const svg = d3.select("#chart")
+            .append("svg")
+            .attr("width", width)
+            .attr("height", height);
+
+        d3.csv("data_ggsheet.csv").then(data => {
+            data.forEach(d => d["Thành tiền"] = +d["Thành tiền"] / 1e6); // Đổi đơn vị sang triệu VND
+
+            // Tạo danh sách nhóm hàng và ánh xạ màu sắc
+            const categories = Array.from(new Set(data.map(d => d["Nhóm hàng"])));
+            const colorScale = d3.scaleOrdinal()
+                .domain(categories)
+                .range(d3.schemeCategory10); 
+
+            // Nhóm dữ liệu theo Nhóm hàng và Mặt hàng
+            const groupedData = d3.rollup(
+                data,
+                v => d3.sum(v, d => d["Thành tiền"]),
+                d => d["Nhóm hàng"],
+                d => `[${d["Mã mặt hàng"]}] ${d["Tên mặt hàng"]}`
+            );
+
+            const processedData = [];
+            groupedData.forEach((items, category) => {
+                items.forEach((value, label) => {
+                    processedData.push({ label, value, category });
+                });
+            });
+
+            processedData.sort((a, b) => b.value - a.value);
+
+            const x = d3.scaleLinear()
+                .domain([0, d3.max(processedData, d => d.value)])
+                .range([0, width - margin.left - margin.right]);
+
+            const y = d3.scaleBand()
+                .domain(processedData.map(d => d.label))
+                .range([0, height - margin.top - margin.bottom])
+                .padding(0.1);
+
+            const g = svg.append("g")
+                .attr("transform", `translate(${margin.left},${margin.top})`);
+
+            g.selectAll(".bar")
+                .data(processedData)
+                .enter()
+                .append("rect")
+                .attr("class", "bar")
+                .attr("y", d => y(d.label))
+                .attr("width", d => x(d.value))
+                .attr("height", y.bandwidth())
+                .attr("fill", d => colorScale(d.category));
+
+            g.selectAll(".label")
+                .data(processedData)
+                .enter()
+                .append("text")
+                .attr("x", d => x(d.value) + 5)
+                .attr("y", d => y(d.label) + y.bandwidth() / 2)
+                .attr("dy", "0.35em")
+                .text(d => `${d.value.toFixed(0)} triệu VND`)
+                .style("font-size", "12px");
+
+            g.append("g")
+                .attr("class", "x-axis")
+                .attr("transform", `translate(0,${height - margin.top - margin.bottom})`)
+                .call(d3.axisBottom(x).ticks(5).tickFormat(d => d + "M"));
+
+            g.append("g")
+                .attr("class", "y-axis")
+                .call(d3.axisLeft(y));
+
+            // Thêm chú thích (Legend)
+            const legendContainer = d3.select("#legend");
+            categories.forEach(category => {
+                const legendItem = legendContainer.append("div").attr("class", "legend-item");
+                legendItem.append("div")
+                    .attr("class", "legend-color")
+                    .style("background-color", colorScale(category));
+                legendItem.append("span").text(category);
+            });
+        }).catch(error => console.error("Lỗi khi đọc file CSV:", error));
+    </script>
+</body>
+</html>
